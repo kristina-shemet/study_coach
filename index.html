@@ -341,6 +341,18 @@ function rebuildPlan(manual){
     }
     return today;
   }
+
+  // Reserve time already spent (completed sessions) on the day it was done, so
+  // finishing work does NOT free up the slot and pull future sessions forward.
+  allSessions().forEach(s=>{
+    const rec=state.done[s.id]; if(!rec) return;
+    const dd=rec.date||today;
+    if(dd<today || days[dd]===undefined) return;   // outside the plan window
+    owner[dd]=s.itemId;
+    used[dd]=(used[dd]||0)+s.min;
+    days[dd].push(s);
+  });
+
   sessions.forEach(s=>{
     if(!place(s,false)){
       // couldn't fit before the exam, squeeze in anyway & flag as tight
@@ -440,10 +452,9 @@ function renderToday(){
   }
   html+=`</div>`;
 
-  // today's tasks (one row per item; completed ones stay visible, checked)
+  // today's tasks (one row per item; completed sessions are already in the plan)
   const planned = state.plan.days[t]||[];
-  const doneToday = allSessions().filter(s=> state.done[s.id] && state.done[s.id].date===t);
-  const groups = groupDay(planned.concat(doneToday));
+  const groups = groupDay(planned);
   const isGroupDone = g=>g.ids.every(id=>state.done[id]);
   const doneG = groups.filter(isGroupDone).length;
   html+=`<div class="card">
@@ -454,7 +465,7 @@ function renderToday(){
   }else{
     const sorted=[...groups].sort((a,b)=> (isGroupDone(a)?1:0)-(isGroupDone(b)?1:0));
     html+='<div style="margin-top:12px">'+sorted.map(g=>groupTaskHTML(g,t,true)).join('')+'</div>';
-    const leftMin=planned.reduce((n,s)=>n+s.min,0);
+    const leftMin=planned.filter(s=>!state.done[s.id]).reduce((n,s)=>n+s.min,0);
     html+=`<p class="muted small" style="margin:6px 2px 0">≈ ${(leftMin/60).toFixed(1)} h left today</p>`;
   }
   html+='</div>';
