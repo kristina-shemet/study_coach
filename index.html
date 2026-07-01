@@ -224,6 +224,7 @@ function load(){
       s.settings = s.settings||{};
       if(!s.settings.restWeekdays) s.settings.restWeekdays=[];
       if(!s.settings.awayDates) s.settings.awayDates=[];
+      if(!s.stoppedDays) s.stoppedDays=[];
       // migrate old per-topic exams to per-item (exercise sheet / lecture) model
       (s.exams||[]).forEach(ex=>{
         if(ex.topics && !ex.items){
@@ -242,6 +243,7 @@ function load(){
     settings:{hoursPerDay:5.5, sessionMin:45, restWeekdays:[], awayDates:[]},
     done:{},        // sessionId -> {date, min}
     plan:{generatedAt:null, days:{}},
+    stoppedDays:[], // days the user called it quits early; no new sessions placed
     streakDates:[]  // list of YYYY-MM-DD with >=1 completed session
   };
 }
@@ -325,6 +327,7 @@ function rebuildPlan(manual){
       const d = addDays(today,i);
       if(!allowAfterDeadline && d>s.deadline) break;
       if(capOn(d)<=0) continue;                        // day off / no time
+      if(state.stoppedDays.includes(d)) continue;      // user called it quits that day
       if(owner[d] && owner[d]!==s.itemId) continue;    // day already taken by another item
       if(used[d]+s.min <= capOn(d)){
         owner[d]=s.itemId; used[d]+=s.min; days[d].push(s); return true;
@@ -468,9 +471,30 @@ function renderToday(){
     const leftMin=planned.filter(s=>!state.done[s.id]).reduce((n,s)=>n+s.min,0);
     html+=`<p class="muted small" style="margin:6px 2px 0">≈ ${(leftMin/60).toFixed(1)} h left today</p>`;
   }
+  // "done for today" control
+  const stopped=state.stoppedDays.includes(t);
+  const remainToday=(state.plan.days[t]||[]).some(s=>!state.done[s.id]);
+  if(stopped){
+    html+=`<div class="small muted" style="margin-top:12px">🌙 You've wrapped up for today. Any unfinished sessions were pushed to your upcoming days.</div>
+      <button class="ghost sm" style="margin-top:8px" onclick="resumeToday()">Actually, keep going</button>`;
+  }else if(remainToday){
+    html+=`<button class="ghost sm" style="margin-top:12px" onclick="stopToday()">🌙 I'm done for today</button>`;
+  }
   html+='</div>';
 
   el.innerHTML=html;
+}
+function stopToday(){
+  const t=todayStr();
+  if(!state.stoppedDays.includes(t)) state.stoppedDays.push(t);
+  save(); rebuildPlan(false);
+  toast('Rest well 🌙 Remaining work moved forward');
+}
+function resumeToday(){
+  const t=todayStr();
+  state.stoppedDays=state.stoppedDays.filter(d=>d!==t);
+  save(); rebuildPlan(false);
+  toast('Back at it ✨');
 }
 
 const KIND_COLOR={
@@ -799,7 +823,7 @@ function importData(e){
       data.settings=data.settings||{hoursPerDay:5.5,sessionMin:45};
       if(!data.settings.restWeekdays) data.settings.restWeekdays=[];
       if(!data.settings.awayDates) data.settings.awayDates=[];
-      data.done=data.done||{}; data.streakDates=data.streakDates||[];
+      data.done=data.done||{}; data.streakDates=data.streakDates||[]; data.stoppedDays=data.stoppedDays||[];
       data.plan=data.plan||{generatedAt:null,days:{}};
       (data.exams||[]).forEach(ex=>{
         if(ex.topics && !ex.items){
