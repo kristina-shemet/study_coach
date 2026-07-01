@@ -246,7 +246,10 @@ function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 
 /* ================= DATE HELPERS ================= */
 function todayStr(){ const d=new Date(); return iso(d); }
-function iso(d){ return d.toISOString().slice(0,10); }
+function iso(d){ // local date as YYYY-MM-DD (never UTC, or day math drifts across timezones)
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function parse(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function addDays(s,n){ const d=parse(s); d.setDate(d.getDate()+n); return iso(d); }
 function daysBetween(a,b){ return Math.round((parse(b)-parse(a))/86400000); }
@@ -294,6 +297,8 @@ function buildSessionsAll(){ return allSessions(); }
 function rebuildPlan(manual){
   const today = todayStr();
   let sessions = buildSessions();
+  const seen=new Set();                       // guard against any duplicate ids
+  sessions = sessions.filter(s=>{ if(seen.has(s.id)) return false; seen.add(s.id); return true; });
   // priority: soonest exam first; keep each item's parts together and in order
   sessions.sort((a,b)=>{
     if(a.deadline!==b.deadline) return a.deadline<b.deadline?-1:1;
