@@ -308,6 +308,7 @@ function rebuildPlan(manual){
   const fullCap = Math.round(state.settings.hoursPerDay*60);
   const capOn = d => isOffDay(d) ? 0 : fullCap;
   const used = {};                 // date -> minutes used
+  const owner = {};                // date -> itemId (one item per day, focus mode)
   const days = {};                 // date -> [sessions]
   for(let i=0;i<=horizon;i++){ const d=addDays(today,i); used[d]=0; days[d]=[]; }
 
@@ -315,7 +316,11 @@ function rebuildPlan(manual){
     for(let i=0;i<=horizon;i++){
       const d = addDays(today,i);
       if(!allowAfterDeadline && d>s.deadline) break;
-      if(capOn(d)>0 && used[d]+s.min <= capOn(d)){ used[d]+=s.min; days[d].push(s); return true; }
+      if(capOn(d)<=0) continue;                        // day off / no time
+      if(owner[d] && owner[d]!==s.itemId) continue;    // day already taken by another item
+      if(used[d]+s.min <= capOn(d)){
+        owner[d]=s.itemId; used[d]+=s.min; days[d].push(s); return true;
+      }
     }
     return false;
   }
@@ -641,11 +646,13 @@ function saveExam(){
 
   if(editingId){
     const ex=state.exams.find(e=>e.id===editingId);
-    // preserve item ids where name matches to keep progress
+    // preserve item ids where name matches to keep progress (each old id used once)
     const oldByName={}; (ex.items||[]).forEach(it=>oldByName[it.name]=it);
+    const usedIds={};
     items=items.map(it=>{
       const old=oldByName[it.name];
-      return old?{...it,id:old.id}:{...it,id:uid()};
+      if(old && !usedIds[old.id]){ usedIds[old.id]=1; return {...it,id:old.id}; }
+      return {...it,id:uid()};
     });
     ex.name=name; ex.date=date; ex.items=items;
   }else{
@@ -806,7 +813,7 @@ function toast(msg){
 document.getElementById('setHours').value=state.settings.hoursPerDay;
 document.getElementById('setSession').value=state.settings.sessionMin;
 if(!document.querySelectorAll('#itemRows .topicline').length) addItemRow();
-planIfNeeded();
+rebuildPlan(false);   // always rebuild on load so the latest scheduling applies
 renderAll();
 </script>
 </body>
