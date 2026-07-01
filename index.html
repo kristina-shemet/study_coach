@@ -427,19 +427,22 @@ function renderToday(){
   }
   html+=`</div>`;
 
-  // today's tasks
-  const doneCount=list.filter(s=>state.done[s.id]).length;
+  // today's tasks (one row per item; completed ones stay visible, checked)
+  const planned = state.plan.days[t]||[];
+  const doneToday = allSessions().filter(s=> state.done[s.id] && state.done[s.id].date===t);
+  const groups = groupDay(planned.concat(doneToday));
+  const isGroupDone = g=>g.ids.every(id=>state.done[id]);
+  const doneG = groups.filter(isGroupDone).length;
   html+=`<div class="card">
-    <div class="row between"><h2 style="margin:0">Today's sessions</h2>
-    <span class="muted small">${doneCount}/${list.length}</span></div>`;
-  if(!list.length){
+    <div class="row between"><h2 style="margin:0">Today's tasks</h2>
+    <span class="muted small">${doneG}/${groups.length}</span></div>`;
+  if(!groups.length){
     html+=`<p class="muted small" style="margin:12px 0 0">Nothing scheduled today. 🎉 Enjoy a break, or hit Replan on the Plan tab.</p>`;
   }else{
-    // learn/review sorted with done at bottom
-    const sorted=[...list].sort((a,b)=> (state.done[a.id]?1:0)-(state.done[b.id]?1:0));
-    html+='<div style="margin-top:12px">'+sorted.map(taskHTML).join('')+'</div>';
-    const totMin=list.reduce((n,s)=>n+s.min,0);
-    html+=`<p class="muted small" style="margin:6px 2px 0">≈ ${(totMin/60).toFixed(1)} h planned today</p>`;
+    const sorted=[...groups].sort((a,b)=> (isGroupDone(a)?1:0)-(isGroupDone(b)?1:0));
+    html+='<div style="margin-top:12px">'+sorted.map(g=>groupTaskHTML(g,t)).join('')+'</div>';
+    const leftMin=planned.reduce((n,s)=>n+s.min,0);
+    html+=`<p class="muted small" style="margin:6px 2px 0">≈ ${(leftMin/60).toFixed(1)} h left today</p>`;
   }
   html+='</div>';
 
@@ -455,20 +458,60 @@ function kindPill(kind){
   const c=KIND_COLOR[kind]||KIND_COLOR['Other'];
   return `<span class="pill" style="background:${c[0]};color:${c[1]}">${escape(kind)}</span>`;
 }
-function taskHTML(s){
-  const done=!!state.done[s.id];
+// Group a day's raw chunks into one block per item, so a big item shows as a
+// single row ("Sheet 3 — 3h") instead of many identical 45-min rows.
+function groupDay(list){
+  const groups=[]; const byItem={};
+  list.forEach(s=>{
+    if(!byItem[s.itemId]){
+      byItem[s.itemId]={itemId:s.itemId,label:s.label,exam:s.exam,color:s.color,kind:s.kind,ids:[],min:0,atRisk:false};
+      groups.push(byItem[s.itemId]);
+    }
+    const g=byItem[s.itemId]; g.ids.push(s.id); g.min+=s.min; if(s.atRisk) g.atRisk=true;
+  });
+  return groups;
+}
+function itemPlanDates(itemId){
+  return Object.keys(state.plan.days).filter(d=>state.plan.days[d].some(s=>s.itemId===itemId)).sort();
+}
+function fmtDur(m){ return m>=60 ? (m%60===0? m/60+'h' : (m/60).toFixed(1)+'h') : m+'m'; }
+function groupTaskHTML(g, date){
+  const done=g.ids.every(id=>state.done[id]);
+  let span='';
+  if(!done){
+    const dates=itemPlanDates(g.itemId);
+    const k=dates.indexOf(date)+1, N=dates.length;
+    if(N>1 && k>0) span=` <span class="muted" style="font-weight:500">· day ${k}/${N}</span>`;
+  }
   return `<div class="task ${done?'done':''}">
-    <button class="check" onclick="toggleDone('${s.id}')">${done?'✓':''}</button>
-    <div class="body" onclick="toggleDone('${s.id}')">
-      <div class="t">${escape(s.label)}${s.part?` <span class="muted" style="font-weight:500">· ${s.part}</span>`:''}</div>
+    <button class="check" onclick="toggleGroup('${g.ids.join(',')}')">${done?'✓':''}</button>
+    <div class="body" onclick="toggleGroup('${g.ids.join(',')}')">
+      <div class="t">${escape(g.label)}${span}</div>
       <div class="row small muted" style="gap:8px;margin-top:3px;flex-wrap:wrap">
-        <span class="dot" style="background:${s.color}"></span>
-        <span>${escape(s.exam)}</span>·<span>${s.min}m</span>
-        ${kindPill(s.kind)}
-        ${s.atRisk?'<span class="risk">⚠ tight</span>':''}
+        <span class="dot" style="background:${g.color}"></span>
+        <span>${escape(g.exam)}</span>·<span>${fmtDur(g.min)}</span>
+        ${kindPill(g.kind)}
+        ${g.atRisk?'<span class="risk">⚠ tight</span>':''}
       </div>
     </div>
   </div>`;
+}
+function toggleGroup(idsStr){
+  const ids=idsStr.split(',');
+  const t=todayStr();
+  const allDone=ids.every(id=>state.done[id]);
+  const all=allSessions();
+  const minOf=id=>{ const s=all.find(x=>x.id===id); return s?s.min:state.settings.sessionMin; };
+  ids.forEach(id=>{
+    if(allDone) delete state.done[id];
+    else if(!state.done[id]) state.done[id]={date:t,min:minOf(id)};
+  });
+  if(!allDone){
+    if(!state.streakDates.includes(t)) state.streakDates.push(t);
+    toast('Nice! Logged ✅');
+  }
+  save();
+  rebuildPlan(false);
 }
 
 function dayLabel(d,t){ return d===t?'Today':d===addDays(t,1)?'Tomorrow':fmtDate(d); }
@@ -489,8 +532,9 @@ function renderPlan(){
     const list=state.plan.days[d]||[];
     if(!list.length) continue;                       // ordinary free day, skip quietly
     const mins=list.reduce((n,s)=>n+s.min,0);
-    html+=`<div class="daygroup"><div class="dh"><span>${dayLabel(d,t)}</span><span>${(mins/60).toFixed(1)}h · ${list.length} session${list.length>1?'s':''}</span></div>`;
-    html+=list.map(taskHTML).join('');
+    const groups=groupDay(list);
+    html+=`<div class="daygroup"><div class="dh"><span>${dayLabel(d,t)}</span><span>${(mins/60).toFixed(1)}h · ${groups.length} task${groups.length>1?'s':''}</span></div>`;
+    html+=groups.map(g=>groupTaskHTML(g,d)).join('');
     html+='</div>';
     shown++;
   }
