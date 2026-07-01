@@ -320,7 +320,20 @@ function rebuildPlan(manual){
   const used = {};                 // date -> minutes used
   const owner = {};                // date -> itemId (one item per day, focus mode)
   const days = {};                 // date -> [sessions]
+  const cnt = {};                  // "date|itemId" -> sessions placed (to spread evenly)
   for(let i=0;i<=horizon;i++){ const d=addDays(today,i); used[d]=0; days[d]=[]; }
+
+  // Spread each item evenly over the fewest days it needs, instead of cramming
+  // each day full (which gave lopsided 7/7/6/6/4 splits). Compute a target
+  // sessions-per-day so a 5-day item shows ~6 each day rather than 7,7,6,6,4.
+  const perDayMax = Math.max(1, Math.floor(fullCap/state.settings.sessionMin));
+  const remCount = {};
+  sessions.forEach(s=> remCount[s.itemId]=(remCount[s.itemId]||0)+1);
+  const itemDayN = {};
+  for(const id in remCount){
+    const nd = Math.max(1, Math.ceil(remCount[id]/perDayMax));
+    itemDayN[id] = Math.ceil(remCount[id]/nd);       // even sessions per day
+  }
 
   function place(s, allowAfterDeadline){
     for(let i=0;i<=horizon;i++){
@@ -329,8 +342,10 @@ function rebuildPlan(manual){
       if(capOn(d)<=0) continue;                        // day off / no time
       if(state.stoppedDays.includes(d)) continue;      // user called it quits that day
       if(owner[d] && owner[d]!==s.itemId) continue;    // day already taken by another item
+      const kd=d+'|'+s.itemId;
+      if(!allowAfterDeadline && (cnt[kd]||0) >= itemDayN[s.itemId]) continue; // keep the load even
       if(used[d]+s.min <= capOn(d)){
-        owner[d]=s.itemId; used[d]+=s.min; days[d].push(s); return true;
+        owner[d]=s.itemId; used[d]+=s.min; days[d].push(s); cnt[kd]=(cnt[kd]||0)+1; return true;
       }
     }
     return false;
@@ -353,6 +368,7 @@ function rebuildPlan(manual){
     if(dd<today || days[dd]===undefined) return;   // outside the plan window
     owner[dd]=s.itemId;
     used[dd]=(used[dd]||0)+s.min;
+    cnt[dd+'|'+s.itemId]=(cnt[dd+'|'+s.itemId]||0)+1;
     days[dd].push(s);
   });
 
