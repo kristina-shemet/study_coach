@@ -87,6 +87,7 @@
   .motiv .q{font-size:15px;font-weight:600;line-height:1.4}
   details summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:6px}
   hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .daysel{width:auto;flex:1;min-width:96px;padding:7px 8px;font-size:12px;border-radius:8px}
   .daygroup{margin-bottom:16px}
   .daygroup .dh{font-size:13px;font-weight:700;color:var(--muted);margin:0 0 8px;display:flex;justify-content:space-between}
   .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--good);color:#062a1c;font-weight:700;padding:11px 18px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:50}
@@ -131,6 +132,8 @@
       <input id="exName" placeholder="e.g. Organic Chemistry">
       <label>Exam date</label>
       <input id="exDate" type="date">
+      <label>Study days per week for this exam (optional)</label>
+      <input id="exDpw" type="number" min="1" max="7" step="1" placeholder="e.g. 3 — leave blank for automatic">
       <label>Exercise sheets / lectures: name, type, and estimated hours</label>
       <div class="row small muted" style="gap:8px;margin-bottom:6px">
         <span style="flex:1">name</span><span style="width:118px">type</span><span style="width:64px">hours</span>
@@ -225,6 +228,7 @@ function load(){
       if(!s.settings.restWeekdays) s.settings.restWeekdays=[];
       if(!s.settings.awayDates) s.settings.awayDates=[];
       if(!s.stoppedDays) s.stoppedDays=[];
+      if(!s.dayOverrides) s.dayOverrides={};
       // migrate old per-topic exams to per-item (exercise sheet / lecture) model
       (s.exams||[]).forEach(ex=>{
         if(ex.topics && !ex.items){
@@ -243,6 +247,7 @@ function load(){
     settings:{hoursPerDay:5.5, sessionMin:45, restWeekdays:[], awayDates:[]},
     done:{},        // sessionId -> {date, min}
     plan:{generatedAt:null, days:{}},
+    dayOverrides:{}, // date -> {exams:[examId] or [examIdA, examIdB] for a split}
     stoppedDays:[], // days the user called it quits early; no new sessions placed
     streakDates:[]  // list of YYYY-MM-DD with >=1 completed session
   };
@@ -299,90 +304,98 @@ function allSessions(){
 function buildSessions(){ return allSessions().filter(s=> !state.done[s.id]); }
 function buildSessionsAll(){ return allSessions(); }
 
+// Exam-day scheduler: each study day is assigned to one exam (a full focused day)
+// or, when the user splits it, two exams at half your daily hours each. Days are
+// picked by urgency + your per-exam weekly quota, and you can pin any day manually.
 function rebuildPlan(manual){
   const today = todayStr();
-  let sessions = buildSessions();
-  const seen=new Set();                       // guard against any duplicate ids
-  sessions = sessions.filter(s=>{ if(seen.has(s.id)) return false; seen.add(s.id); return true; });
-  // priority: soonest exam first; keep each item's parts together and in order
-  sessions.sort((a,b)=>{
-    if(a.deadline!==b.deadline) return a.deadline<b.deadline?-1:1;
-    if(a.itemId!==b.itemId) return a.itemId<b.itemId?-1:1;
-    return a.idx-b.idx;
-  });
+  const fullCap = Math.round(state.settings.hoursPerDay*60);
+  const isBlocked = d => isOffDay(d) || state.stoppedDays.includes(d);
 
-  // horizon = latest exam date (or 14 days out if none)
   let last = today;
   state.exams.forEach(e=>{ if(e.date>last) last=e.date; });
   const horizon = Math.max(daysBetween(today,last), 0);
-  const fullCap = Math.round(state.settings.hoursPerDay*60);
-  const capOn = d => isOffDay(d) ? 0 : fullCap;
-  const used = {};                 // date -> minutes used
-  const owner = {};                // date -> itemId (one item per day, focus mode)
-  const days = {};                 // date -> [sessions]
-  const cnt = {};                  // "date|itemId" -> sessions placed (to spread evenly)
-  for(let i=0;i<=horizon;i++){ const d=addDays(today,i); used[d]=0; days[d]=[]; }
 
-  // Spread each item evenly over the fewest days it needs, instead of cramming
-  // each day full (which gave lopsided 7/7/6/6/4 splits). Compute a target
-  // sessions-per-day so a 5-day item shows ~6 each day rather than 7,7,6,6,4.
-  const perDayMax = Math.max(1, Math.floor(fullCap/state.settings.sessionMin));
-  const remCount = {};
-  sessions.forEach(s=> remCount[s.itemId]=(remCount[s.itemId]||0)+1);
-  const itemDayN = {};
-  for(const id in remCount){
-    const nd = Math.max(1, Math.ceil(remCount[id]/perDayMax));
-    itemDayN[id] = Math.ceil(remCount[id]/nd);       // even sessions per day
+  // per-exam queue of pending (not-done) sessions, in item order then part order
+  const all = allSessions();
+  const itemOrder={}; state.exams.forEach(e=>(e.items||[]).forEach((it,i)=>itemOrder[it.id]=i));
+  const pending={}; state.exams.forEach(e=> pending[e.id]=[]);
+  const seen=new Set();
+  all.forEach(s=>{ if(state.done[s.id]||seen.has(s.id)) return; seen.add(s.id); if(pending[s.examId]) pending[s.examId].push(s); });
+  for(const id in pending) pending[id].sort((a,b)=> (itemOrder[a.itemId]-itemOrder[b.itemId]) || (a.idx-b.idx));
+
+  const days={}, used={};
+  for(let i=0;i<=horizon;i++){ const d=addDays(today,i); days[d]=[]; used[d]=0; }
+
+  // reserve completed sessions on the day they were done (protect that time)
+  all.forEach(s=>{ const rec=state.done[s.id]; if(!rec) return; const dd=rec.date||today;
+    if(dd<today || days[dd]===undefined) return; used[dd]+=s.min; days[dd].push(s); });
+
+  const weekOf = d => Math.floor(daysBetween(today,d)/7);
+  const weekUse = {};                                   // "examId|week" -> days used
+  const pendingMin = id => pending[id].reduce((n,s)=>n+s.min,0);
+  function availDays(id, fromD){
+    const ex=state.exams.find(e=>e.id===id); if(!ex) return 0;
+    let c=0; for(let d=fromD; d<=ex.date; d=addDays(d,1)) if(!isBlocked(d)) c++;
+    return c;
   }
+  // days the exam would actually get if its weekly quota were respected
+  function quotaAvail(id, fromD){
+    const ex=state.exams.find(e=>e.id===id); if(!ex) return 0;
+    const total=availDays(id,fromD);
+    if(!ex.daysPerWeek) return total;
+    const weeks=Math.max(1, Math.ceil((daysBetween(fromD,ex.date)+1)/7));
+    return Math.min(total, weeks*ex.daysPerWeek);
+  }
+  // urgent = can't finish within its quota in time, so the quota is overridden
+  const isUrgent = (id,fromD) => Math.ceil(pendingMin(id)/fullCap) >= quotaAvail(id,fromD);
 
-  function place(s, allowAfterDeadline){
-    for(let i=0;i<=horizon;i++){
-      const d = addDays(today,i);
-      if(!allowAfterDeadline && d>s.deadline) break;
-      if(capOn(d)<=0) continue;                        // day off / no time
-      if(state.stoppedDays.includes(d)) continue;      // user called it quits that day
-      if(owner[d] && owner[d]!==s.itemId) continue;    // day already taken by another item
-      const kd=d+'|'+s.itemId;
-      if(!allowAfterDeadline && (cnt[kd]||0) >= itemDayN[s.itemId]) continue; // keep the load even
-      if(used[d]+s.min <= capOn(d)){
-        owner[d]=s.itemId; used[d]+=s.min; days[d].push(s); cnt[kd]=(cnt[kd]||0)+1; return true;
-      }
+  function fillExam(d, id, upTo){
+    const q=pending[id];
+    while(q.length && used[d]+q[0].min<=upTo && used[d]+q[0].min<=fullCap){
+      const s=q.shift(); s.slotExam=id; used[d]+=s.min; days[d].push(s);
     }
-    return false;
+  }
+  function pickAuto(d){
+    const cand=state.exams.filter(e=>pending[e.id].length).sort((a,b)=> a.date<b.date?-1:1);
+    for(const e of cand) if(isUrgent(e.id,d)) return [e.id];      // deadline beats quota
+    for(const e of cand){
+      if(e.daysPerWeek && (weekUse[e.id+'|'+weekOf(d)]||0) >= e.daysPerWeek) continue;
+      return [e.id];
+    }
+    return [];                                                    // all at quota, none urgent -> rest
   }
 
+  for(let i=0;i<=horizon;i++){
+    const d=addDays(today,i);
+    if(isBlocked(d) || used[d]>=fullCap) continue;
+    let assigned=[];
+    const ov=state.dayOverrides[d];
+    if(ov && ov.exams) assigned=ov.exams.filter(id=> pending[id] && pending[id].length);
+    if(!assigned.length) assigned=pickAuto(d);
+    if(!assigned.length) continue;
+    const before=used[d];
+    if(assigned.length>=2){                                       // split day: half and half
+      fillExam(d, assigned[0], before+Math.floor(fullCap/2));
+      fillExam(d, assigned[1], fullCap);
+    } else {
+      fillExam(d, assigned[0], fullCap);
+    }
+    if(used[d]>before) assigned.forEach(id=>{ const k=id+'|'+weekOf(d); weekUse[k]=(weekUse[k]||0)+1; });
+  }
+
+  // anything still pending couldn't fit in time -> flag tight, drop near its exam
   function nearestStudyDay(pref){
-    if(pref>=today && !isOffDay(pref)) return pref;
+    if(pref>=today && !isBlocked(pref)) return pref;
     for(let i=1;i<=horizon+1;i++){
-      const b=addDays(pref,-i); if(b>=today && !isOffDay(b)) return b;
-      const a=addDays(pref, i); if(a<=addDays(today,horizon) && !isOffDay(a)) return a;
+      const b=addDays(pref,-i); if(b>=today && !isBlocked(b)) return b;
+      const a=addDays(pref, i); if(a<=addDays(today,horizon) && !isBlocked(a)) return a;
     }
     return today;
   }
-
-  // Reserve time already spent (completed sessions) on the day it was done, so
-  // finishing work does NOT free up the slot and pull future sessions forward.
-  allSessions().forEach(s=>{
-    const rec=state.done[s.id]; if(!rec) return;
-    const dd=rec.date||today;
-    if(dd<today || days[dd]===undefined) return;   // outside the plan window
-    owner[dd]=s.itemId;
-    used[dd]=(used[dd]||0)+s.min;
-    cnt[dd+'|'+s.itemId]=(cnt[dd+'|'+s.itemId]||0)+1;
-    days[dd].push(s);
-  });
-
-  sessions.forEach(s=>{
-    if(!place(s,false)){
-      // couldn't fit before the exam, squeeze in anyway & flag as tight
-      s.atRisk = true;
-      if(!place(s,true)){
-        // everything full: dump on the nearest actual study day
-        const d = nearestStudyDay(s.deadline>=today ? s.deadline : today);
-        (days[d]=days[d]||[]).push(s);
-      }
-    }
-  });
+  state.exams.forEach(e=> pending[e.id].forEach(s=>{
+    s.atRisk=true; const d=nearestStudyDay(e.date>=today?e.date:today); (days[d]=days[d]||[]).push(s);
+  }));
 
   state.plan = {generatedAt:today, days};
   save();
@@ -603,6 +616,50 @@ function toggleGroup(idsStr){
 }
 
 function dayLabel(d,t){ return d===t?'Today':d===addDays(t,1)?'Tomorrow':fmtDate(d); }
+// controls under each plan day: pick the exam(s) for that day, split it, or reset
+function inferDayExams(d){
+  const list=state.plan.days[d]||[];
+  return [...new Set(list.filter(s=>s.examId).map(s=> s.slotExam||s.examId))];
+}
+function examOptions(sel){
+  return state.exams.map(e=>`<option value="${e.id}"${e.id===sel?' selected':''}>${escape(e.name)}</option>`).join('');
+}
+function dayControls(d){
+  if(state.exams.length<1) return '';
+  const ov=state.dayOverrides[d];
+  const cur = (ov && ov.exams && ov.exams.length) ? ov.exams : inferDayExams(d);
+  const split = cur.length>=2;
+  let h=`<div class="row small" style="gap:6px;flex-wrap:wrap;margin:0 0 8px">`;
+  h+=`<select class="daysel" onchange="setDayExam('${d}',0,this.value)">${examOptions(cur[0])}</select>`;
+  if(split && state.exams.length>1) h+=`<select class="daysel" onchange="setDayExam('${d}',1,this.value)">${examOptions(cur[1])}</select>`;
+  if(state.exams.length>1) h+= split
+    ? `<button class="ghost sm" onclick="unsplitDay('${d}')">Unsplit</button>`
+    : `<button class="ghost sm" onclick="splitDay('${d}')">+ Split</button>`;
+  if(ov) h+=`<button class="ghost sm" onclick="clearDayOverride('${d}')" title="back to automatic">↺ Auto</button>`;
+  h+=`</div>`;
+  return h;
+}
+function setDayExam(d, slot, examId){
+  const cur=(state.dayOverrides[d]&&state.dayOverrides[d].exams)? [...state.dayOverrides[d].exams] : inferDayExams(d);
+  cur[slot]=examId;
+  state.dayOverrides[d]={exams:cur.filter(Boolean)};
+  save(); rebuildPlan(false);
+}
+function splitDay(d){
+  const cur=(state.dayOverrides[d]&&state.dayOverrides[d].exams)||inferDayExams(d);
+  const first=cur[0]||(state.exams[0]&&state.exams[0].id);
+  const second=(state.exams.find(e=>e.id!==first)||{}).id||first;
+  state.dayOverrides[d]={exams:[first,second]};
+  save(); rebuildPlan(false); toast('Day split in half');
+}
+function unsplitDay(d){
+  const cur=(state.dayOverrides[d]&&state.dayOverrides[d].exams)||inferDayExams(d);
+  state.dayOverrides[d]={exams:[cur[0]||(state.exams[0]&&state.exams[0].id)]};
+  save(); rebuildPlan(false);
+}
+function clearDayOverride(d){
+  delete state.dayOverrides[d]; save(); rebuildPlan(false); toast('Back to automatic');
+}
 function renderPlan(){
   const el=document.getElementById('planContent');
   if(!state.exams.length){ el.innerHTML=`<div class="card empty"><span class="emoji">🗓️</span>Add an exam first and I'll build your schedule.</div>`; return; }
@@ -622,6 +679,7 @@ function renderPlan(){
     const mins=list.reduce((n,s)=>n+s.min,0);
     const groups=groupDay(list);
     html+=`<div class="daygroup"><div class="dh"><span>${dayLabel(d,t)}</span><span>${(mins/60).toFixed(1)}h · ${groups.length} task${groups.length>1?'s':''}</span></div>`;
+    html+=dayControls(d);
     html+=groups.map(g=>groupTaskHTML(g,d)).join('');
     html+='</div>';
     shown++;
@@ -647,7 +705,7 @@ function renderExams(){
         <span class="pill" style="background:var(--card2);color:${d<3&&d>=0?'var(--warn)':'var(--muted)'}">${fmtShort(ex.date)} · ${when}</span>
       </div>
       <div class="bar" style="margin:8px 0 6px"><i style="width:${pct}%"></i></div>
-      <div class="small muted">${items.length} item${items.length!==1?'s':''} · ${totH}h total · ${doneN} done · ${pct}%</div>
+      <div class="small muted">${items.length} item${items.length!==1?'s':''} · ${totH}h total · ${doneN} done · ${pct}%${ex.daysPerWeek?` · ${ex.daysPerWeek}×/week`:''}</div>
       <details><summary>show items</summary>
         <div style="margin-top:8px">${items.map(it=>`<div class="small" style="padding:3px 0;color:${itemDone(it)?'var(--good)':'var(--txt)'}">${itemDone(it)?'✓ ':'• '}${escape(it.name)} <span class="muted">(${escape(it.kind||'Exercise sheet')}, ${it.hours||1}h)</span></div>`).join('')}</div>
       </details>
@@ -724,6 +782,8 @@ function saveExam(){
   const date=document.getElementById('exDate').value;
   if(!name){ toast('Give the exam a name'); return; }
   if(!date){ toast('Pick an exam date'); return; }
+  const dpwRaw=parseInt(document.getElementById('exDpw').value);
+  const daysPerWeek=(dpwRaw>=1 && dpwRaw<=7)?dpwRaw:null;
   let items=readItems();
   if(!items.length){ toast('Add at least one item'); return; }
 
@@ -737,11 +797,11 @@ function saveExam(){
       if(old && !usedIds[old.id]){ usedIds[old.id]=1; return {...it,id:old.id}; }
       return {...it,id:uid()};
     });
-    ex.name=name; ex.date=date; ex.items=items;
+    ex.name=name; ex.date=date; ex.items=items; ex.daysPerWeek=daysPerWeek;
   }else{
     state.exams.push({
       id:uid(), name, date, color:COLORS[state.exams.length%COLORS.length],
-      items:items.map(it=>({...it,id:uid()}))
+      daysPerWeek, items:items.map(it=>({...it,id:uid()}))
     });
   }
   save();
@@ -756,6 +816,7 @@ function editExam(id){
   document.getElementById('examFormTitle').textContent='Edit exam';
   document.getElementById('exName').value=ex.name;
   document.getElementById('exDate').value=ex.date;
+  document.getElementById('exDpw').value=ex.daysPerWeek||'';
   document.getElementById('itemRows').innerHTML='';
   (ex.items||[]).forEach(it=>addItemRow(it.name,it.kind,it.hours));
   document.getElementById('cancelEditBtn').style.display='';
@@ -767,6 +828,7 @@ function resetExamForm(){
   document.getElementById('examFormTitle').textContent='Add an exam';
   document.getElementById('exName').value='';
   document.getElementById('exDate').value='';
+  document.getElementById('exDpw').value='';
   document.getElementById('itemRows').innerHTML='';
   addItemRow();
   document.getElementById('cancelEditBtn').style.display='none';
@@ -839,7 +901,7 @@ function importData(e){
       data.settings=data.settings||{hoursPerDay:5.5,sessionMin:45};
       if(!data.settings.restWeekdays) data.settings.restWeekdays=[];
       if(!data.settings.awayDates) data.settings.awayDates=[];
-      data.done=data.done||{}; data.streakDates=data.streakDates||[]; data.stoppedDays=data.stoppedDays||[];
+      data.done=data.done||{}; data.streakDates=data.streakDates||[]; data.stoppedDays=data.stoppedDays||[]; data.dayOverrides=data.dayOverrides||{};
       data.plan=data.plan||{generatedAt:null,days:{}};
       (data.exams||[]).forEach(ex=>{
         if(ex.topics && !ex.items){
