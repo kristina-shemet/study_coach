@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#10b981">
+<title>Study Coach</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#ffffff; --card2:#eef1f7; --line:#e3e7f0;
+    --txt:#1a2233; --muted:#6b7280; --accent:#10b981;
+    --accent2:#06b6d4; --good:#059669; --warn:#f59e0b; --bad:#ef4444;
+    --r:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding-bottom:78px; line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:16px}
+  header{padding:18px 16px 6px}
+  h1{font-size:22px;margin:0;font-weight:800;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(20,30,60,.05)}
+  .card h2{margin:0 0 10px;font-size:16px;font-weight:700}
+  .row{display:flex;gap:10px;align-items:center}
+  .between{justify-content:space-between}
+  .muted{color:var(--muted)}
+  .small{font-size:12px}
+  .big{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{
+    width:100%;background:var(--card2);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:11px 12px;font-size:15px;font-family:inherit;outline:none
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  button{
+    background:var(--accent);color:#fff;border:none;border-radius:11px;
+    padding:12px 14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit
+  }
+  button:active{transform:scale(.98)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+  button.sm{padding:7px 11px;font-size:13px;border-radius:9px}
+  button.danger{background:transparent;border:1px solid var(--line);color:var(--bad)}
+  .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700}
+  .bar{height:9px;background:var(--card2);border-radius:999px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:999px;transition:width .4s}
+  .task{display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:9px;background:var(--card2)}
+  .task.done{opacity:.5}
+  .check{
+    flex:0 0 26px;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);
+    background:transparent;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;padding:0
+  }
+  .task.done .check{background:var(--good);border-color:var(--good)}
+  .task .body{flex:1;min-width:0}
+  .task .t{font-weight:600;font-size:15px}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 9px}
+  nav{
+    position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.94);
+    backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    display:flex;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom))
+  }
+  nav button{background:none;color:var(--muted);font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 10px;flex:1}
+  nav button .ic{font-size:20px;line-height:1}
+  nav button.active{color:var(--txt)}
+  .view{display:none}
+  .view.active{display:block}
+  .topicline{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .topicline input{flex:1}
+  .topicline .diff{width:118px}
+  .empty{text-align:center;padding:30px 16px;color:var(--muted)}
+  .emoji{font-size:40px;display:block;margin-bottom:8px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .stat{background:var(--card2);border-radius:12px;padding:14px;text-align:center}
+  .stat .n{font-size:24px;font-weight:800}
+  .stat .l{font-size:11px;color:var(--muted);margin-top:2px}
+  .examhdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .risk{color:var(--warn);font-size:12px;font-weight:700}
+  .motiv{background:linear-gradient(135deg,#10b981,#06b6d4);border:none;color:#fff}
+  .motiv .small{color:rgba(255,255,255,.85)}
+  .motiv .q{font-size:15px;font-weight:600;line-height:1.4}
+  details summary{cursor:pointer;font-size:13px;color:var(--muted);margin-top:6px}
+  hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .daygroup{margin-bottom:16px}
+  .daygroup .dh{font-size:13px;font-weight:700;color:var(--muted);margin:0 0 8px;display:flex;justify-content:space-between}
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--good);color:#062a1c;font-weight:700;padding:11px 18px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header class="wrap" style="padding-bottom:0">
+  <div class="row between">
+    <div>
+      <h1>📚 Study Coach</h1>
+      <div class="sub" id="dateSub"></div>
+    </div>
+    <div id="streakBadge"></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ TODAY ============ -->
+  <section class="view active" id="view-today">
+    <div id="todayContent"></div>
+  </section>
+
+  <!-- ============ PLAN ============ -->
+  <section class="view" id="view-plan">
+    <div class="row between" style="margin-bottom:12px">
+      <h2 style="margin:0;font-size:18px">Your plan</h2>
+      <button class="ghost sm" onclick="rebuildPlan(true)">↻ Replan</button>
+    </div>
+    <div id="planContent"></div>
+  </section>
+
+  <!-- ============ EXAMS ============ -->
+  <section class="view" id="view-exams">
+    <h2 style="margin:0 0 12px;font-size:18px">Exams &amp; items</h2>
+    <div id="examList"></div>
+    <div class="card">
+      <h2 id="examFormTitle">Add an exam</h2>
+      <label>Exam name</label>
+      <input id="exName" placeholder="e.g. Organic Chemistry">
+      <label>Exam date</label>
+      <input id="exDate" type="date">
+      <label>Exercise sheets / lectures: name, type, and estimated hours</label>
+      <div class="row small muted" style="gap:8px;margin-bottom:6px">
+        <span style="flex:1">name</span><span style="width:118px">type</span><span style="width:64px">hours</span>
+      </div>
+      <div id="itemRows"></div>
+      <button class="ghost sm" onclick="addItemRow()" style="margin-top:8px">+ Add item</button>
+      <p class="small muted" style="margin-top:8px">The last box is <b>hours</b>: how long the whole item takes. Anything longer than one session is auto-split across days.</p>
+      <hr>
+      <div class="row">
+        <button onclick="saveExam()" style="flex:1">Save exam</button>
+        <button class="ghost" id="cancelEditBtn" style="display:none" onclick="resetExamForm()">Cancel</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROGRESS / SETTINGS ============ -->
+  <section class="view" id="view-more">
+    <h2 style="margin:0 0 12px;font-size:18px">Progress</h2>
+    <div id="progressContent"></div>
+
+    <div class="card">
+      <h2>Settings</h2>
+      <label>Hours I can study per day</label>
+      <input id="setHours" type="number" min="0.5" max="16" step="0.5">
+      <label>Session length (minutes)</label>
+      <input id="setSession" type="number" min="20" max="120" step="5">
+      <button class="ghost sm" onclick="saveSettings()" style="margin-top:12px">Save settings</button>
+    </div>
+
+    <div class="card">
+      <h2>Days off 🏖️</h2>
+      <label>Weekdays I never study</label>
+      <div id="weekdayToggles" class="row" style="flex-wrap:wrap;gap:6px"></div>
+      <label style="margin-top:14px">Specific days I'm away</label>
+      <div class="row" style="gap:8px">
+        <input id="awayDate" type="date" style="flex:1">
+        <button class="ghost sm" onclick="addAwayDate()">Add</button>
+      </div>
+      <div id="awayList" style="margin-top:10px"></div>
+      <p class="small muted" style="margin-top:8px">I'll skip these days and pack your work into the days you're around.</p>
+    </div>
+
+    <div class="card">
+      <h2>Data</h2>
+      <div class="row">
+        <button class="ghost sm" onclick="exportData()">Export backup</button>
+        <button class="danger sm" onclick="wipeData()">Reset everything</button>
+      </div>
+      <p class="small muted" style="margin-top:10px">Everything is stored only on this device. Bookmark this page or add it to your home screen so you don't lose it.</p>
+    </div>
+  </section>
+
+</div>
+
+<nav>
+  <button data-view="today" class="active" onclick="go('today')"><span class="ic">☀️</span>Today</button>
+  <button data-view="plan" onclick="go('plan')"><span class="ic">🗓️</span>Plan</button>
+  <button data-view="exams" onclick="go('exams')"><span class="ic">📝</span>Exams</button>
+  <button data-view="more" onclick="go('more')"><span class="ic">📊</span>Progress</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= STATE ================= */
+const KEY = 'studyCoach.v1';
+const DIFF = {1:'Easy',2:'Medium',3:'Hard'};
+const COLORS = ['#6366f1','#22d3ee','#f472b6','#34d399','#fbbf24','#fb7185','#a78bfa','#38bdf8'];
+const MOTIV = [
+  "Small steps every day beat cramming every time. You've got this. 💪",
+  "Progress, not perfection. One session done is a win.",
+  "The best time to study was yesterday. The second best is now. 🚀",
+  "Future-you is watching. Make them proud today.",
+  "You don't have to be great to start, but you have to start to be great.",
+  "Consistency is the cheat code. Show up again today. 🔥",
+  "Every topic you master is one less worry on exam day.",
+  "Focus on the next 45 minutes, not the whole mountain. 🏔️",
+  "You've done hard things before. This is just the next one.",
+  "Discipline now, freedom later. Let's earn it. ✨"
+];
+
+let state = load();
+
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if(s && s.exams){
+      s.settings = s.settings||{};
+      if(!s.settings.restWeekdays) s.settings.restWeekdays=[];
+      if(!s.settings.awayDates) s.settings.awayDates=[];
+      // migrate old per-topic exams to per-item (exercise sheet / lecture) model
+      (s.exams||[]).forEach(ex=>{
+        if(ex.topics && !ex.items){
+          ex.items = ex.topics.map(tp=>({
+            id: tp.id, name: tp.name, kind:'Exercise sheet',
+            hours: Math.max(0.5, (tp.difficulty||2)*0.75)
+          }));
+          delete ex.topics;
+        }
+      });
+      return s;
+    }
+  }catch(e){}
+  return {
+    exams:[],
+    settings:{hoursPerDay:5.5, sessionMin:45, restWeekdays:[], awayDates:[]},
+    done:{},        // sessionId -> {date, min}
+    plan:{generatedAt:null, days:{}},
+    streakDates:[]  // list of YYYY-MM-DD with >=1 completed session
+  };
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+
+/* ================= DATE HELPERS ================= */
+function todayStr(){ const d=new Date(); return iso(d); }
+function iso(d){ return d.toISOString().slice(0,10); }
+function parse(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(s,n){ const d=parse(s); d.setDate(d.getDate()+n); return iso(d); }
+function daysBetween(a,b){ return Math.round((parse(b)-parse(a))/86400000); }
+function fmtDate(s){ return parse(s).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }
+function fmtShort(s){ return parse(s).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+function isOffDay(s){
+  const wd = parse(s).getDay();               // 0 Sun .. 6 Sat
+  return state.settings.restWeekdays.includes(wd) || state.settings.awayDates.includes(s);
+}
+
+/* ================= PLAN ENGINE ================= */
+// Each study item (an exercise sheet / lecture / reading) has an estimated number
+// of hours. We split that into session-sized chunks; a big item naturally spans
+// several days because its chunks flow across the daily time budget.
+function itemChunks(item){
+  const total = Math.max(15, Math.round((item.hours||1)*60));   // minutes of work
+  const s = state.settings.sessionMin;
+  const n = Math.max(1, Math.ceil(total/s));
+  const chunks=[]; let rem=total;
+  for(let i=0;i<n;i++){ const m=Math.min(s,rem); chunks.push(m); rem-=m; }
+  return chunks;                                                 // e.g. [45,45,30]
+}
+
+// Full list of study sessions (chunks) across all exams, unfiltered.
+function allSessions(){
+  const out=[];
+  state.exams.forEach(ex=>(ex.items||[]).forEach(it=>{
+    const chunks=itemChunks(it);
+    chunks.forEach((m,i)=>{
+      out.push({
+        id: it.id+'-'+i, idx:i, examId:ex.id, itemId:it.id,
+        kind: it.kind||'Exercise sheet',
+        label: it.name || 'Study',
+        part: chunks.length>1 ? `part ${i+1}/${chunks.length}` : '',
+        exam: ex.name, color: ex.color, min: m,
+        deadline: ex.date, examDate: ex.date
+      });
+    });
+  }));
+  return out;
+}
+function buildSessions(){ return allSessions().filter(s=> !state.done[s.id]); }
+function buildSessionsAll(){ return allSessions(); }
+
+function rebuildPlan(manual){
+  const today = todayStr();
+  let sessions = buildSessions();
+  // priority: soonest exam first; keep each item's parts together and in order
+  sessions.sort((a,b)=>{
+    if(a.deadline!==b.deadline) return a.deadline<b.deadline?-1:1;
+    if(a.itemId!==b.itemId) return a.itemId<b.itemId?-1:1;
+    return a.idx-b.idx;
+  });
+
+  // horizon = latest exam date (or 14 days out if none)
+  let last = today;
+  state.exams.forEach(e=>{ if(e.date>last) last=e.date; });
+  const horizon = Math.max(daysBetween(today,last), 0);
+  const fullCap = Math.round(state.settings.hoursPerDay*60);
+  const capOn = d => isOffDay(d) ? 0 : fullCap;
+  const used = {};                 // date -> minutes used
+  const days = {};                 // date -> [sessions]
+  for(let i=0;i<=horizon;i++){ const d=addDays(today,i); used[d]=0; days[d]=[]; }
+
+  function place(s, allowAfterDeadline){
+    for(let i=0;i<=horizon;i++){
+      const d = addDays(today,i);
+      if(!allowAfterDeadline && d>s.deadline) break;
+      if(capOn(d)>0 && used[d]+s.min <= capOn(d)){ used[d]+=s.min; days[d].push(s); return true; }
+    }
+    return false;
+  }
+
+  function nearestStudyDay(pref){
+    if(pref>=today && !isOffDay(pref)) return pref;
+    for(let i=1;i<=horizon+1;i++){
+      const b=addDays(pref,-i); if(b>=today && !isOffDay(b)) return b;
+      const a=addDays(pref, i); if(a<=addDays(today,horizon) && !isOffDay(a)) return a;
+    }
+    return today;
+  }
+  sessions.forEach(s=>{
+    if(!place(s,false)){
+      // couldn't fit before the exam, squeeze in anyway & flag as tight
+      s.atRisk = true;
+      if(!place(s,true)){
+        // everything full: dump on the nearest actual study day
+        const d = nearestStudyDay(s.deadline>=today ? s.deadline : today);
+        (days[d]=days[d]||[]).push(s);
+      }
+    }
+  });
+
+  state.plan = {generatedAt:today, days};
+  save();
+  renderAll();
+  if(manual) toast('Plan updated ↻');
+}
+
+function planIfNeeded(){
+  if(state.plan.generatedAt !== todayStr()) rebuildPlan(false);
+}
+
+/* ================= COMPLETION ================= */
+function toggleDone(id){
+  const t = todayStr();
+  if(state.done[id]){
+    delete state.done[id];
+  }else{
+    state.done[id] = {date:t, min:state.settings.sessionMin};
+    if(!state.streakDates.includes(t)) state.streakDates.push(t);
+    toast('Nice! Session logged ✅');
+  }
+  save();
+  rebuildPlan(false); // reflow remaining work
+}
+
+function streakCount(){
+  if(!state.streakDates.length) return 0;
+  const set = new Set(state.streakDates);
+  let n=0, cur=todayStr();
+  // allow streak to count if studied today OR yesterday (grace)
+  if(!set.has(cur)) cur = addDays(cur,-1);
+  while(set.has(cur)){ n++; cur=addDays(cur,-1); }
+  return n;
+}
+
+/* ================= STATS ================= */
+function stats(){
+  let totMin=0, doneMin=0, count=0, doneCount=0;
+  allSessions().forEach(s=>{ totMin+=s.min; count++; if(state.done[s.id]){ doneMin+=s.min; doneCount++; } });
+  return {totMin, doneMin, count, doneCount, pct: totMin? Math.round(doneMin/totMin*100):0};
+}
+function examProgress(ex){
+  let t=0,d=0;
+  allSessions().filter(s=>s.examId===ex.id).forEach(s=>{ t+=s.min; if(state.done[s.id]) d+=s.min; });
+  return t? d/t : 0;
+}
+function nextExam(){
+  const t=todayStr();
+  const up = state.exams.filter(e=>e.date>=t).sort((a,b)=>a.date<b.date?-1:1);
+  return up[0]||null;
+}
+
+/* ================= RENDER ================= */
+function renderAll(){ renderToday(); renderPlan(); renderExams(); renderProgress(); renderDaysOff(); renderHeader(); }
+
+function renderHeader(){
+  document.getElementById('dateSub').textContent =
+    new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+  const s=streakCount();
+  document.getElementById('streakBadge').innerHTML =
+    s>0 ? `<div class="pill" style="background:#fff3e0;color:#b45309">🔥 ${s} day${s>1?'s':''}</div>` : '';
+}
+
+function renderToday(){
+  const el=document.getElementById('todayContent');
+  if(!state.exams.length){
+    el.innerHTML = onboarding();
+    return;
+  }
+  const t=todayStr();
+  const list=(state.plan.days[t]||[]);
+  const ne=nextExam();
+  const st=stats();
+  const mot = MOTIV[ (new Date().getDate()) % MOTIV.length ];
+
+  let html='';
+  // motivation + countdown
+  html+=`<div class="card motiv">
+      <div class="q">${mot}</div>`;
+  if(ne){
+    const d=daysBetween(t,ne.date);
+    html+=`<div class="row between" style="margin-top:14px">
+        <div><div class="big">${d===0?'Today':d}</div><div class="small">${d===0?'🎯 exam day!':'day'+(d>1?'s':'')+' to '+ne.name}</div></div>
+        <div style="text-align:right"><div class="big">${st.pct}%</div><div class="small">overall done</div></div>
+      </div>`;
+  }
+  html+=`</div>`;
+
+  // today's tasks
+  const doneCount=list.filter(s=>state.done[s.id]).length;
+  html+=`<div class="card">
+    <div class="row between"><h2 style="margin:0">Today's sessions</h2>
+    <span class="muted small">${doneCount}/${list.length}</span></div>`;
+  if(!list.length){
+    html+=`<p class="muted small" style="margin:12px 0 0">Nothing scheduled today. 🎉 Enjoy a break, or hit Replan on the Plan tab.</p>`;
+  }else{
+    // learn/review sorted with done at bottom
+    const sorted=[...list].sort((a,b)=> (state.done[a.id]?1:0)-(state.done[b.id]?1:0));
+    html+='<div style="margin-top:12px">'+sorted.map(taskHTML).join('')+'</div>';
+    const totMin=list.reduce((n,s)=>n+s.min,0);
+    html+=`<p class="muted small" style="margin:6px 2px 0">≈ ${(totMin/60).toFixed(1)} h planned today</p>`;
+  }
+  html+='</div>';
+
+  el.innerHTML=html;
+}
+
+const KIND_COLOR={
+  'Exercise sheet':['#e6f6ee','#059669'], 'Lecture':['#e0f7fa','#0891b2'],
+  'Reading':['#eef2ff','#4f46e5'], 'Revision':['#fff3e0','#b45309'],
+  'Practice exam':['#fdecef','#be123c'], 'Other':['#eef1f7','#6b7280']
+};
+function kindPill(kind){
+  const c=KIND_COLOR[kind]||KIND_COLOR['Other'];
+  return `<span class="pill" style="background:${c[0]};color:${c[1]}">${escape(kind)}</span>`;
+}
+function taskHTML(s){
+  const done=!!state.done[s.id];
+  return `<div class="task ${done?'done':''}">
+    <button class="check" onclick="toggleDone('${s.id}')">${done?'✓':''}</button>
+    <div class="body" onclick="toggleDone('${s.id}')">
+      <div class="t">${escape(s.label)}${s.part?` <span class="muted" style="font-weight:500">· ${s.part}</span>`:''}</div>
+      <div class="row small muted" style="gap:8px;margin-top:3px;flex-wrap:wrap">
+        <span class="dot" style="background:${s.color}"></span>
+        <span>${escape(s.exam)}</span>·<span>${s.min}m</span>
+        ${kindPill(s.kind)}
+        ${s.atRisk?'<span class="risk">⚠ tight</span>':''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function dayLabel(d,t){ return d===t?'Today':d===addDays(t,1)?'Tomorrow':fmtDate(d); }
+function renderPlan(){
+  const el=document.getElementById('planContent');
+  if(!state.exams.length){ el.innerHTML=`<div class="card empty"><span class="emoji">🗓️</span>Add an exam first and I'll build your schedule.</div>`; return; }
+  const t=todayStr();
+  const filled=Object.keys(state.plan.days).filter(d=>d>=t && state.plan.days[d].length).sort();
+  if(!filled.length){ el.innerHTML=`<div class="card empty"><span class="emoji">✅</span>All sessions complete. Legend.</div>`; return; }
+  const lastDay=filled[filled.length-1];
+  let html='', shown=0;
+  for(let d=t, guard=0; d<=lastDay && guard<80 && shown<25; d=addDays(d,1), guard++){
+    if(isOffDay(d)){
+      html+=`<div class="daygroup"><div class="dh"><span>${dayLabel(d,t)}</span><span>🏖️ day off</span></div>
+        <div class="task" style="opacity:.7"><div class="body"><div class="small muted">Away, no study planned. Enjoy it!</div></div></div></div>`;
+      shown++; continue;
+    }
+    const list=state.plan.days[d]||[];
+    if(!list.length) continue;                       // ordinary free day, skip quietly
+    const mins=list.reduce((n,s)=>n+s.min,0);
+    html+=`<div class="daygroup"><div class="dh"><span>${dayLabel(d,t)}</span><span>${(mins/60).toFixed(1)}h · ${list.length} session${list.length>1?'s':''}</span></div>`;
+    html+=list.map(taskHTML).join('');
+    html+='</div>';
+    shown++;
+  }
+  el.innerHTML=html;
+}
+
+function renderExams(){
+  const el=document.getElementById('examList');
+  if(!state.exams.length){ el.innerHTML=''; return; }
+  const t=todayStr();
+  el.innerHTML = state.exams.slice().sort((a,b)=>a.date<b.date?-1:1).map(ex=>{
+    const d=daysBetween(t,ex.date);
+    const when = d<0?'passed': d===0?'today': d+'d';
+    const items=(ex.items||[]);
+    const doneN=items.filter(itemDone).length;
+    const totH=items.reduce((n,it)=>n+(it.hours||0),0);
+    const pct=Math.round(examProgress(ex)*100);
+    return `<div class="card">
+      <div class="examhdr">
+        <div class="row" style="gap:8px"><span class="dot" style="background:${ex.color}"></span>
+        <strong>${escape(ex.name)}</strong></div>
+        <span class="pill" style="background:var(--card2);color:${d<3&&d>=0?'var(--warn)':'var(--muted)'}">${fmtShort(ex.date)} · ${when}</span>
+      </div>
+      <div class="bar" style="margin:8px 0 6px"><i style="width:${pct}%"></i></div>
+      <div class="small muted">${items.length} item${items.length!==1?'s':''} · ${totH}h total · ${doneN} done · ${pct}%</div>
+      <details><summary>show items</summary>
+        <div style="margin-top:8px">${items.map(it=>`<div class="small" style="padding:3px 0;color:${itemDone(it)?'var(--good)':'var(--txt)'}">${itemDone(it)?'✓ ':'• '}${escape(it.name)} <span class="muted">(${escape(it.kind||'Exercise sheet')}, ${it.hours||1}h)</span></div>`).join('')}</div>
+      </details>
+      <div class="row" style="margin-top:12px">
+        <button class="ghost sm" onclick="editExam('${ex.id}')">Edit</button>
+        <button class="danger sm" onclick="delExam('${ex.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function itemDone(it){
+  const all=allSessions().filter(s=>s.itemId===it.id);
+  return all.length && all.every(s=>state.done[s.id]);
+}
+
+function renderProgress(){
+  const el=document.getElementById('progressContent');
+  const st=stats();
+  const s=streakCount();
+  const totMin=Object.values(state.done).reduce((n,x)=>n+(x.min||0),0);
+  el.innerHTML=`
+    <div class="card">
+      <div class="row between"><h2 style="margin:0">Overall</h2><span class="muted small">${st.doneCount}/${st.count} sessions</span></div>
+      <div class="bar" style="margin:12px 0"><i style="width:${st.pct}%"></i></div>
+      <div class="grid2" style="margin-top:14px">
+        <div class="stat"><div class="n">${st.pct}%</div><div class="l">complete</div></div>
+        <div class="stat"><div class="n">🔥 ${s}</div><div class="l">day streak</div></div>
+        <div class="stat"><div class="n">${(totMin/60).toFixed(1)}h</div><div class="l">studied total</div></div>
+        <div class="stat"><div class="n">${state.exams.filter(e=>e.date>=todayStr()).length}</div><div class="l">exams ahead</div></div>
+      </div>
+    </div>`;
+}
+
+/* ================= ONBOARDING ================= */
+function onboarding(){
+  return `<div class="card">
+    <span class="emoji" style="text-align:center;display:block">👋</span>
+    <h2 style="text-align:center">Let's set you up</h2>
+    <p class="muted small" style="text-align:center;margin:0 0 14px">Add your first exam with its exercise sheets / lectures and how long each takes. I'll turn it into a day-by-day plan that fits your time and adapts as you go.</p>
+    <button style="width:100%" onclick="go('exams')">➕ Add my first exam</button>
+  </div>
+  <div class="card">
+    <h2>How it works</h2>
+    <div class="small muted" style="line-height:1.7">
+    1️⃣ Add each exam, then its sheets/lectures &amp; hours each.<br>
+    2️⃣ I split big items and schedule them back from each exam.<br>
+    3️⃣ Check off sessions on the <b>Today</b> tab.<br>
+    4️⃣ Away or behind? I reshuffle the rest around your days off.<br>
+    5️⃣ Track streaks &amp; progress to stay motivated. 🔥</div>
+  </div>`;
+}
+
+/* ================= EXAM FORM ================= */
+let editingId=null;
+const KINDS=['Exercise sheet','Lecture','Reading','Revision','Practice exam','Other'];
+function addItemRow(name='',kind='Exercise sheet',hours=2){
+  const row=document.createElement('div');
+  row.className='topicline';
+  row.innerHTML=`<input class="iname" placeholder="e.g. Sheet 3 / Lecture 5" value="${escapeAttr(name)}">
+    <select class="ikind diff">${KINDS.map(k=>`<option${k===kind?' selected':''}>${k}</option>`).join('')}</select>
+    <input class="ihours" type="number" min="0.5" max="40" step="0.5" value="${hours}" style="flex:0 0 64px;width:64px" title="estimated hours">`;
+  document.getElementById('itemRows').appendChild(row);
+}
+function readItems(){
+  return [...document.querySelectorAll('#itemRows .topicline')].map(r=>{
+    const name=r.querySelector('.iname').value.trim();
+    const kind=r.querySelector('.ikind').value;
+    const hours=Math.max(0.5, parseFloat(r.querySelector('.ihours').value)||1);
+    return name?{name,kind,hours}:null;
+  }).filter(Boolean);
+}
+function saveExam(){
+  const name=document.getElementById('exName').value.trim();
+  const date=document.getElementById('exDate').value;
+  if(!name){ toast('Give the exam a name'); return; }
+  if(!date){ toast('Pick an exam date'); return; }
+  let items=readItems();
+  if(!items.length){ toast('Add at least one item'); return; }
+
+  if(editingId){
+    const ex=state.exams.find(e=>e.id===editingId);
+    // preserve item ids where name matches to keep progress
+    const oldByName={}; (ex.items||[]).forEach(it=>oldByName[it.name]=it);
+    items=items.map(it=>{
+      const old=oldByName[it.name];
+      return old?{...it,id:old.id}:{...it,id:uid()};
+    });
+    ex.name=name; ex.date=date; ex.items=items;
+  }else{
+    state.exams.push({
+      id:uid(), name, date, color:COLORS[state.exams.length%COLORS.length],
+      items:items.map(it=>({...it,id:uid()}))
+    });
+  }
+  save();
+  resetExamForm();
+  rebuildPlan(false);
+  toast('Exam saved ✅');
+  go('plan');
+}
+function editExam(id){
+  const ex=state.exams.find(e=>e.id===id); if(!ex)return;
+  editingId=id;
+  document.getElementById('examFormTitle').textContent='Edit exam';
+  document.getElementById('exName').value=ex.name;
+  document.getElementById('exDate').value=ex.date;
+  document.getElementById('itemRows').innerHTML='';
+  (ex.items||[]).forEach(it=>addItemRow(it.name,it.kind,it.hours));
+  document.getElementById('cancelEditBtn').style.display='';
+  go('exams');
+  window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+}
+function resetExamForm(){
+  editingId=null;
+  document.getElementById('examFormTitle').textContent='Add an exam';
+  document.getElementById('exName').value='';
+  document.getElementById('exDate').value='';
+  document.getElementById('itemRows').innerHTML='';
+  addItemRow();
+  document.getElementById('cancelEditBtn').style.display='none';
+}
+function delExam(id){
+  if(!confirm('Delete this exam and its progress?')) return;
+  state.exams=state.exams.filter(e=>e.id!==id);
+  save(); rebuildPlan(false); toast('Exam deleted');
+}
+
+/* ================= SETTINGS / DATA ================= */
+function saveSettings(){
+  const h=parseFloat(document.getElementById('setHours').value)||5;
+  const m=parseInt(document.getElementById('setSession').value)||45;
+  state.settings.hoursPerDay=Math.max(.5,h);
+  state.settings.sessionMin=Math.max(20,m);
+  save(); rebuildPlan(false); toast('Settings saved');
+}
+const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function renderDaysOff(){
+  const wt=document.getElementById('weekdayToggles');
+  wt.innerHTML=WD.map((n,i)=>{
+    const on=state.settings.restWeekdays.includes(i);
+    return `<button class="sm ${on?'':'ghost'}" style="${on?'':'color:var(--muted)'}" onclick="toggleRestDay(${i})">${n}</button>`;
+  }).join('');
+  const al=document.getElementById('awayList');
+  const list=[...state.settings.awayDates].sort();
+  al.innerHTML = list.length ? list.map(d=>
+    `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <span class="small">${fmtDate(d)}</span>
+      <button class="danger sm" onclick="removeAwayDate('${d}')">Remove</button>
+    </div>`).join('') : `<p class="small muted" style="margin:4px 0 0">No away days added.</p>`;
+}
+function toggleRestDay(i){
+  const arr=state.settings.restWeekdays;
+  const k=arr.indexOf(i);
+  if(k>=0) arr.splice(k,1); else arr.push(i);
+  save(); rebuildPlan(false);
+}
+function addAwayDate(){
+  const d=document.getElementById('awayDate').value;
+  if(!d) return;
+  if(!state.settings.awayDates.includes(d)) state.settings.awayDates.push(d);
+  document.getElementById('awayDate').value='';
+  save(); rebuildPlan(false); toast('Away day added 🏖️');
+}
+function removeAwayDate(d){
+  state.settings.awayDates=state.settings.awayDates.filter(x=>x!==d);
+  save(); rebuildPlan(false);
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='study-coach-backup.json';
+  a.click();
+}
+function wipeData(){
+  if(!confirm('Erase ALL exams, plans and progress? This cannot be undone.')) return;
+  localStorage.removeItem(KEY); state=load(); resetExamForm(); renderAll(); go('today');
+  toast('Reset complete');
+}
+
+/* ================= NAV / UTIL ================= */
+function go(v){
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+  window.scrollTo(0,0);
+}
+function uid(){ return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3); }
+function escape(s){ return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
+let toastT;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1800);
+}
+
+/* ================= INIT ================= */
+document.getElementById('setHours').value=state.settings.hoursPerDay;
+document.getElementById('setSession').value=state.settings.sessionMin;
+if(!document.querySelectorAll('#itemRows .topicline').length) addItemRow();
+planIfNeeded();
+renderAll();
+</script>
+</body>
+</html>
