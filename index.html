@@ -667,12 +667,12 @@ function renderPlan(){
   const filled=Object.keys(state.plan.days).filter(d=>d>=t && state.plan.days[d].length).sort();
   if(!filled.length){ el.innerHTML=`<div class="card empty"><span class="emoji">✅</span>All sessions complete. Legend.</div>`; return; }
   const lastDay=filled[filled.length-1];
-  let html='', shown=0;
-  for(let d=t, guard=0; d<=lastDay && guard<80 && shown<25; d=addDays(d,1), guard++){
+  let html='';
+  for(let d=t, guard=0; d<=lastDay && guard<800; d=addDays(d,1), guard++){
     if(isOffDay(d)){
       html+=`<div class="daygroup"><div class="dh"><span>${dayLabel(d,t)}</span><span>🏖️ day off</span></div>
         <div class="task" style="opacity:.7"><div class="body"><div class="small muted">Away, no study planned. Enjoy it!</div></div></div></div>`;
-      shown++; continue;
+      continue;
     }
     const list=state.plan.days[d]||[];
     if(!list.length) continue;                       // ordinary free day, skip quietly
@@ -682,7 +682,6 @@ function renderPlan(){
     html+=dayControls(d);
     html+=groups.map(g=>groupTaskHTML(g,d)).join('');
     html+='</div>';
-    shown++;
   }
   el.innerHTML=html;
 }
