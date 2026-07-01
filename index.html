@@ -57,6 +57,9 @@
   .task.done .check{background:var(--good);border-color:var(--good)}
   .task .body{flex:1;min-width:0}
   .task .t{font-weight:600;font-size:15px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{width:32px;height:32px;padding:0;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--muted);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .chip.on{background:var(--good);border-color:var(--good);color:#fff}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 9px}
   nav{
     position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.94);
@@ -450,7 +453,7 @@ function renderToday(){
     html+=`<p class="muted small" style="margin:12px 0 0">Nothing scheduled today. 🎉 Enjoy a break, or hit Replan on the Plan tab.</p>`;
   }else{
     const sorted=[...groups].sort((a,b)=> (isGroupDone(a)?1:0)-(isGroupDone(b)?1:0));
-    html+='<div style="margin-top:12px">'+sorted.map(g=>groupTaskHTML(g,t)).join('')+'</div>';
+    html+='<div style="margin-top:12px">'+sorted.map(g=>groupTaskHTML(g,t,true)).join('')+'</div>';
     const leftMin=planned.reduce((n,s)=>n+s.min,0);
     html+=`<p class="muted small" style="margin:6px 2px 0">≈ ${(leftMin/60).toFixed(1)} h left today</p>`;
   }
@@ -474,18 +477,19 @@ function groupDay(list){
   const groups=[]; const byItem={};
   list.forEach(s=>{
     if(!byItem[s.itemId]){
-      byItem[s.itemId]={itemId:s.itemId,label:s.label,exam:s.exam,color:s.color,kind:s.kind,ids:[],min:0,atRisk:false};
+      byItem[s.itemId]={itemId:s.itemId,label:s.label,exam:s.exam,color:s.color,kind:s.kind,ids:[],sess:[],min:0,atRisk:false};
       groups.push(byItem[s.itemId]);
     }
-    const g=byItem[s.itemId]; g.ids.push(s.id); g.min+=s.min; if(s.atRisk) g.atRisk=true;
+    const g=byItem[s.itemId]; g.ids.push(s.id); g.sess.push({id:s.id,min:s.min,idx:s.idx}); g.min+=s.min; if(s.atRisk) g.atRisk=true;
   });
+  groups.forEach(g=>g.sess.sort((a,b)=>a.idx-b.idx));
   return groups;
 }
 function itemPlanDates(itemId){
   return Object.keys(state.plan.days).filter(d=>state.plan.days[d].some(s=>s.itemId===itemId)).sort();
 }
 function fmtDur(m){ return m>=60 ? (m%60===0? m/60+'h' : (m/60).toFixed(1)+'h') : m+'m'; }
-function groupTaskHTML(g, date){
+function groupTaskHTML(g, date, showSessions){
   const done=g.ids.every(id=>state.done[id]);
   let span='';
   if(!done){
@@ -493,18 +497,41 @@ function groupTaskHTML(g, date){
     const k=dates.indexOf(date)+1, N=dates.length;
     if(N>1 && k>0) span=` <span class="muted" style="font-weight:500">· day ${k}/${N}</span>`;
   }
+  const n=g.sess.length;
+  const sessMeta = n>1 ? `·<span>${n} × ${state.settings.sessionMin}m</span>` : '';
+  let chips='';
+  if(showSessions && n>1){
+    const doneN=g.sess.filter(s=>state.done[s.id]).length;
+    chips=`<div class="chips">`+g.sess.map((s,i)=>{
+      const d=!!state.done[s.id];
+      return `<button class="chip ${d?'on':''}" title="${s.min} min session" onclick="event.stopPropagation();toggleOne('${s.id}')">${d?'✓':i+1}</button>`;
+    }).join('')+`</div><div class="small muted" style="margin-top:5px">${doneN}/${n} sessions done — tap each 45 min as you finish</div>`;
+  }
   return `<div class="task ${done?'done':''}">
     <button class="check" onclick="toggleGroup('${g.ids.join(',')}')">${done?'✓':''}</button>
     <div class="body" onclick="toggleGroup('${g.ids.join(',')}')">
       <div class="t">${escape(g.label)}${span}</div>
       <div class="row small muted" style="gap:8px;margin-top:3px;flex-wrap:wrap">
         <span class="dot" style="background:${g.color}"></span>
-        <span>${escape(g.exam)}</span>·<span>${fmtDur(g.min)}</span>
+        <span>${escape(g.exam)}</span>·<span>${fmtDur(g.min)}</span>${sessMeta}
         ${kindPill(g.kind)}
         ${g.atRisk?'<span class="risk">⚠ tight</span>':''}
       </div>
+      ${chips}
     </div>
   </div>`;
+}
+function toggleOne(id){
+  const t=todayStr();
+  if(state.done[id]){ delete state.done[id]; }
+  else{
+    const s=allSessions().find(x=>x.id===id);
+    state.done[id]={date:t, min:s?s.min:state.settings.sessionMin};
+    if(!state.streakDates.includes(t)) state.streakDates.push(t);
+    toast('Session done ✅');
+  }
+  save();
+  rebuildPlan(false);
 }
 function toggleGroup(idsStr){
   const ids=idsStr.split(',');
