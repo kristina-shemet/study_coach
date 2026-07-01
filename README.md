@@ -61,7 +61,10 @@ single HTML file that runs entirely in your browser and works great on a phone.
 - Everything you enter is stored **only in the browser on your device**
   (via `localStorage`). There is no account, no server, and no database.
 - Because of that, use the app in **one place** (e.g. your phone) as its home.
-- Use **Progress → Export backup** now and then to save a JSON copy of your data.
+- **Export backup** (Progress tab) saves a dated JSON file of everything. The app
+  shows when you last backed up and nudges you after a week.
+- **Import backup** restores from one of those files — use it to recover your data or
+  move it to another device/browser.
 - **Reset everything** under Progress wipes all local data.
 
 ## Running / hosting

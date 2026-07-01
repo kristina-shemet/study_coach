@@ -171,12 +171,15 @@
     </div>
 
     <div class="card">
-      <h2>Data</h2>
-      <div class="row">
-        <button class="ghost sm" onclick="exportData()">Export backup</button>
+      <h2>Data &amp; backups</h2>
+      <div class="row" style="flex-wrap:wrap">
+        <button class="ghost sm" onclick="exportData()">⬇ Export backup</button>
+        <button class="ghost sm" onclick="document.getElementById('importFile').click()">⬆ Import backup</button>
         <button class="danger sm" onclick="wipeData()">Reset everything</button>
       </div>
-      <p class="small muted" style="margin-top:10px">Everything is stored only on this device. Bookmark this page or add it to your home screen so you don't lose it.</p>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importData(event)">
+      <div id="backupNote" class="small muted" style="margin-top:10px"></div>
+      <p class="small muted" style="margin-top:8px">Your data lives only in this browser. <b>Export a backup regularly</b> (it saves a file) so you can restore it here anytime, or move it to another device. Add this page to your home screen so you always find it.</p>
     </div>
   </section>
 
@@ -389,7 +392,7 @@ function nextExam(){
 }
 
 /* ================= RENDER ================= */
-function renderAll(){ renderToday(); renderPlan(); renderExams(); renderProgress(); renderDaysOff(); renderHeader(); }
+function renderAll(){ renderToday(); renderPlan(); renderExams(); renderProgress(); renderDaysOff(); renderBackupNote(); renderHeader(); }
 
 function renderHeader(){
   document.getElementById('dateSub').textContent =
@@ -681,11 +684,56 @@ function removeAwayDate(d){
   save(); rebuildPlan(false);
 }
 function exportData(){
+  state.lastBackup=todayStr(); save();
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='study-coach-backup.json';
+  a.download='study-coach-backup-'+todayStr()+'.json';
   a.click();
+  renderBackupNote();
+  toast('Backup saved ⬇');
+}
+function importData(e){
+  const file=e.target.files[0]; if(!file){ return; }
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      if(!data || !Array.isArray(data.exams)) throw new Error('bad');
+      if(!confirm('Replace ALL current data with this backup file?')){ e.target.value=''; return; }
+      // normalise & migrate just like on load
+      data.settings=data.settings||{hoursPerDay:5.5,sessionMin:45};
+      if(!data.settings.restWeekdays) data.settings.restWeekdays=[];
+      if(!data.settings.awayDates) data.settings.awayDates=[];
+      data.done=data.done||{}; data.streakDates=data.streakDates||[];
+      data.plan=data.plan||{generatedAt:null,days:{}};
+      (data.exams||[]).forEach(ex=>{
+        if(ex.topics && !ex.items){
+          ex.items=ex.topics.map(tp=>({id:tp.id,name:tp.name,kind:'Exercise sheet',hours:Math.max(0.5,(tp.difficulty||2)*0.75)}));
+          delete ex.topics;
+        }
+      });
+      state=data; save();
+      document.getElementById('setHours').value=state.settings.hoursPerDay;
+      document.getElementById('setSession').value=state.settings.sessionMin;
+      rebuildPlan(false); renderAll(); go('today');
+      toast('Backup restored ✅');
+    }catch(err){
+      toast('That file is not a valid backup');
+    }
+    e.target.value='';
+  };
+  reader.readAsText(file);
+}
+function renderBackupNote(){
+  const el=document.getElementById('backupNote'); if(!el) return;
+  if(state.lastBackup){
+    const d=daysBetween(state.lastBackup, todayStr());
+    const txt = d<=0?'today' : d===1?'yesterday' : d+' days ago';
+    el.innerHTML=`Last backup: <b>${txt}</b>.`+(d>=7?' <span style="color:var(--warn)">⚠ time for a fresh one.</span>':'');
+  }else{
+    el.innerHTML='<span style="color:var(--warn)">⚠ No backup yet — export one to be safe.</span>';
+  }
 }
 function wipeData(){
   if(!confirm('Erase ALL exams, plans and progress? This cannot be undone.')) return;
